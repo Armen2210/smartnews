@@ -22,6 +22,13 @@ class Source(models.Model):
     name = models.CharField(max_length=200)
     url = models.URLField()
     is_active = models.BooleanField(default=True)
+    default_category = models.ForeignKey(
+        Category,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="default_sources",
+    )
 
     class Meta:
         ordering = ["name"]
