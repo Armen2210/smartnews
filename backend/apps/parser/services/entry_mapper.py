@@ -1,28 +1,82 @@
 from __future__ import annotations
 
+import time
 from datetime import datetime
+from typing import Any, Tuple
 
 from django.utils import timezone
 
 
-def _parse_published(entry: dict) -> tuple[datetime, bool]:
+def _get_entry_value(entry: Any, key: str) -> Any:
+    """
+    Надёжно достаёт значение из entry, который может быть:
+    - dict
+    - feedparser.util.FeedParserDict (ведёт себя как dict, но иногда лучше поддержать getattr)
+    - любой объект с атрибутами
+    """
+    # dict / FeedParserDict
+    try:
+        if hasattr(entry, "get"):
+            val = entry.get(key)
+            if val is not None:
+                return val
+    except Exception:
+        pass
+
+    # object attribute
+    try:
+        return getattr(entry, key)
+    except Exception:
+        return None
+
+
+def _parse_published(entry) -> tuple[datetime, bool]:
+    print("🔥 PARSE FUNCTION CALLED")
+    print("ENTRY TYPE:", type(entry))
+
+    # ПРАВИЛЬНЫЙ доступ
     raw = entry.get("published_parsed") or entry.get("updated_parsed")
+
+    print("RAW VALUE:", raw)
+
     if not raw:
         return timezone.now(), True
 
     try:
-        return datetime(*raw[:6], tzinfo=timezone.utc), False
+        dt = datetime.fromtimestamp(
+            time.mktime(raw),
+            tz=timezone.utc
+        )
+        return dt, False
     except Exception:
         return timezone.now(), True
 
 
-def map_entry(entry: dict, source) -> tuple[dict, bool]:
+def map_entry(entry: Any, source) -> Tuple[dict, bool]:
+    """
+    Маппит RSS entry в словарь для persister/pipeline.
+    """
     published_at, is_missing = _parse_published(entry)
+
+    title = (_get_entry_value(entry, "title") or "").strip()[:500]
+    url = (_get_entry_value(entry, "link") or "").strip()
+
+    summary = _get_entry_value(entry, "summary") or ""
+
+    content = ""
+    raw_content = _get_entry_value(entry, "content")
+    if raw_content:
+        # обычно это список словарей [{'value': '...'}]
+        try:
+            content = (raw_content[0] or {}).get("value", "") if isinstance(raw_content, list) else ""
+        except Exception:
+            content = ""
+
     return {
-        "title": (entry.get("title") or "").strip()[:500],
-        "url": (entry.get("link") or "").strip(),
-        "summary": entry.get("summary") or "",
-        "content": (entry.get("content") or [{}])[0].get("value", "") if entry.get("content") else "",
+        "title": title,
+        "url": url,
+        "summary": summary,
+        "content": content,
         "published_at": published_at,
         "source": source,
         "category": getattr(source, "default_category", None),
