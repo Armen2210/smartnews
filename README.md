@@ -1,77 +1,146 @@
 # 🚀 SmartNews Backend
 
-Backend-сервис для агрегации, обработки и доставки новостей с краткими пересказами и поддержкой Telegram-бота.
+Backend-сервис для агрегации, обработки и доставки новостей:
+- сбор из RSS-источников (Celery)
+- сохранение новостей, источников и категорий
+- API для новостей и избранного
+- инфраструктура: Redis, логирование, health-check
 
 ---
 
 ## 🧱 Stack
 
-* Python 3.11
-* Django 5
-* Django REST Framework
-* Celery + Redis
-* SQLite (dev) / PostgreSQL (prod)
-* Docker / Docker Compose
+- Python 3.11
+- Django 5 + Django REST Framework
+- Celery 5 + Redis
+- SQLite (dev) / PostgreSQL (prod)
+- Docker / Docker Compose
 
 ---
 
 ## 📦 Features
 
-### 🔹 Core
+### 🔹 News & Users
+- Хранение новостей, категорий, источников
+- Пользователи (Django auth)
+- Избранные новости (Favorite)
+- Предпочтения по категориям (UserPreferences)
 
-* Агрегация новостей (подготовка к парсингу)
-* Хранение новостей, категорий и источников
-* Генерация и хранение AI-пересказов (подготовлено)
-
-### 🔹 API
-
-* Получение списка новостей
-* Фильтрация по категориям
-* Детальная информация по новости
-* Работа с избранным (toggle)
-
-### 🔹 Users
-
-* Пользователи (Django auth)
-* Предпочтения по категориям
-* Избранные новости
+### 🔹 Parser (RSS)
+- Загрузка активных источников
+- Чтение RSS через `feedparser`
+- Маппинг entries → News
+- Извлечение текста (fallback через HTTP + HTML parsing)
+- Дедупликация
+- Метрики пайплайна (создано/дубликаты/ошибки/пустой текст и т.д.)
+- Логирование выполнения задач в отдельную модель TaskLog (приложение `tasklog`)
 
 ### 🔹 Infrastructure
-
-* Celery (асинхронные задачи)
-* Redis (broker + backend)
-* Логирование
-* Health-check endpoints
+- Celery worker (асинхронная обработка)
+- Redis (broker + result backend)
+- Логирование в файл `backend/logs/app.log`
+- Health-check endpoints: `/health/` и `/api/health/`
 
 ---
 
-## 📁 Project Structure
+## 📁 Project Structure (актуально по проекту)
 
-```
-backend/
-├── apps/
-│   ├── news/          # Новости, категории, источники, API
-│   ├── users/         # Пользователи, избранное, предпочтения
-│   ├── parser/        # (заготовка под парсер)
-│   └── ai_service/    # (заготовка под AI)
+
+smartnews/
+├── backend/
+│ ├── apps/
+│ │ ├── ai_service/
+│ │ │ ├── migrations/
+│ │ │ ├── admin.py
+│ │ │ ├── apps.py
+│ │ │ ├── models.py
+│ │ │ ├── tasks.py
+│ │ │ ├── tests.py
+│ │ │ └── views.py
+│ │ │
+│ │ ├── news/
+│ │ │ ├── migrations/
+│ │ │ ├── admin.py
+│ │ │ ├── apps.py
+│ │ │ ├── models.py
+│ │ │ ├── serializers.py
+│ │ │ ├── urls.py
+│ │ │ ├── views.py
+│ │ │ └── tests.py
+│ │ │
+│ │ ├── users/
+│ │ │ ├── migrations/
+│ │ │ ├── admin.py
+│ │ │ ├── apps.py
+│ │ │ ├── models.py
+│ │ │ ├── serializers.py
+│ │ │ ├── urls.py
+│ │ │ ├── views.py
+│ │ │ └── tests.py
+│ │ │
+│ │ ├── tasklog/
+│ │ │ ├── migrations/
+│ │ │ ├── admin.py
+│ │ │ ├── apps.py
+│ │ │ ├── models.py
+│ │ │ ├── views.py
+│ │ │ └── tests.py
+│ │ │
+│ │ └── parser/
+│ │ ├── api/
+│ │ │ ├── serializers.py
+│ │ │ ├── urls.py
+│ │ │ └── views.py
+│ │ ├── migrations/
+│ │ ├── services/
+│ │ │ ├── content_extractor.py
+│ │ │ ├── dedup.py
+│ │ │ ├── entry_mapper.py
+│ │ │ ├── errors.py
+│ │ │ ├── html_cleaner.py
+│ │ │ ├── http_client.py
+│ │ │ ├── metrics.py
+│ │ │ ├── persister.py
+│ │ │ ├── pipeline.py
+│ │ │ ├── rss_reader.py
+│ │ │ ├── source_loader.py
+│ │ │ └── tasklog_resolver.py
+│ │ ├── admin.py
+│ │ ├── apps.py
+│ │ ├── models.py
+│ │ ├── tasks.py
+│ │ ├── views.py
+│ │ └── tests.py
+│ │
+│ ├── config/
+│ │ ├── settings/
+│ │ │ ├── base.py
+│ │ │ ├── local.py
+│ │ │ └── prod.py
+│ │ ├── celery.py
+│ │ ├── health.py
+│ │ ├── urls.py
+│ │ ├── asgi.py
+│ │ └── wsgi.py
+│ │
+│ ├── logs/
+│ │ └── app.log
+│ │
+│ ├── .env
+│ ├── .env.example
+│ ├── celerybeat-schedule.dat
+│ ├── celerybeat-schedule.dir
+│ ├── celerybeat-schedule.bak
+│ ├── db.sqlite3
+│ ├── manage.py
+│ ├── docker-compose.yml
+│ ├── Dockerfile
+│ └── requirements.txt
 │
-├── config/
-│   ├── settings/
-│   │   ├── base.py
-│   │   ├── local.py
-│   │   └── prod.py
-│   ├── celery.py
-│   ├── urls.py
-│   └── health.py
-│
-├── logs/
-│   └── app.log
-│
-├── manage.py
-├── docker-compose.yml
-├── Dockerfile
-└── requirements.txt
-```
+├── .gitattributes
+├── LICENSE
+└── README.md
+
 
 ---
 
@@ -81,38 +150,18 @@ backend/
 
 #### Получить список новостей
 
-```
 GET /api/news/
-```
 
-Фильтр по категории:
 
-```
+Фильтр по категории (slug):
+
 GET /api/news/?category=politics
-```
 
-Ответ:
-
-```json
-[
-  {
-    "id": 1,
-    "title": "Заголовок",
-    "summary_text": "Краткий пересказ",
-    "category": "politics",
-    "source": "BBC",
-    "published_at": "2026-02-22T12:00:00Z"
-  }
-]
-```
-
----
 
 #### Получить одну новость
 
-```
 GET /api/news/<id>/
-```
+
 
 ---
 
@@ -120,211 +169,102 @@ GET /api/news/<id>/
 
 #### Toggle избранного
 
-```
 POST /api/favorites/toggle/
-```
+
 
 Body:
-
 ```json
 {
   "news_id": 1
 }
-```
 
 Ответ:
 
-```json
 {"status": "added"}
-```
 
 или
 
-```json
 {"status": "removed"}
-```
-
----
-
-## 🧠 Data Models
-
-### News
-
-* title
-* url (unique)
-* source (FK)
-* category (FK)
-* published_at
-* original_text
-* summary_text
-* summary_status (pending / processing / done / failed)
-
-### Category
-
-* name (unique)
-* slug (unique)
-
-### Source
-
-* name
-* url
-* is_active
-
-### UserPreferences
-
-* user (OneToOne)
-* categories (ManyToMany)
-
-### Favorite
-
-* user + news (unique)
-
----
-
-## ❤️ Health-check
-
-| Endpoint       | Description      |
-| -------------- | ---------------- |
-| `/health/`     | Проверка backend |
-| `/api/health/` | Проверка API     |
+❤️ Health-check
+Endpoint	Description
+/health/	Проверка backend
+/api/health/	Проверка API
 
 Ответ:
 
-```json
 {"status": "ok"}
-```
+⚙️ Environment Variables
 
----
+Файл: backend/.env
 
-## ⚙️ Environment Variables
+Пример (backend/.env.example):
 
-Файл: `backend/.env`
-
-```
 DJANGO_DEBUG=1
 DJANGO_SECRET_KEY=unsafe-dev-key
 
 DATABASE_URL=sqlite:///db.sqlite3
 
-REDIS_URL=redis://redis:6379/0
+REDIS_URL=redis://localhost:6379/0
 
-CELERY_BROKER_URL=redis://redis:6379/0
-CELERY_RESULT_BACKEND=redis://redis:6379/0
-```
-
----
-
-## 🐳 Run with Docker (recommended)
-
-```
-docker compose up --build
-```
-
-Доступ:
-
-* API: http://localhost:8000
-* Redis: localhost:6379
-
----
-
-## 💻 Local Development (Windows)
-
-### 1. Redis
-
-```
-docker run -p 6379:6379 --name smartnews-redis -d redis:7
-```
-
-### 2. Django
-
-```
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/0
+💻 Local Development (Windows)
+1) Установить зависимости
 cd backend
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+2) Redis (проще через Docker)
+docker run -p 6379:6379 --name smartnews-redis -d redis:7
+3) Миграции + запуск Django
 python manage.py migrate
 python manage.py runserver
-```
-
-### 3. Celery Worker
-
-```
+4) Celery Worker (Windows)
 celery -A config worker -l info -P solo
-```
 
-⚠️ Windows:
-используем `-P solo`
+⚠️ На Windows используем -P solo.
 
-### 4. Celery Beat
-
-```
+5) Celery Beat (если нужен планировщик)
 celery -A config beat -l info
-```
+🔁 Celery Tasks
+Парсинг RSS-источников
 
----
+Запуск из Django shell:
 
-## 🔁 Celery Tasks (заготовка)
+from apps.parser.tasks import parse_sources_task
+parse_sources_task.delay()
+📝 Logging
 
-```python
-from apps.parser.tasks import parse_news_stub
-parse_news_stub.delay()
+Логи пишутся в:
 
-from apps.ai_service.tasks import summarize_stub
-summarize_stub.delay()
-```
-
----
-
-## 📝 Logging
-
-Логи:
-
-```
 backend/logs/app.log
-```
+🧠 Notes / Known Issues
 
----
+На Windows prefork работает нестабильно → используем -P solo.
 
-## 🐳 Docker Configuration
+Для production рекомендуется Linux + PostgreSQL.
 
-(оставляем как есть — уже настроено)
+✅ Status
+Component	Status
+Models	✅
+Admin	✅
+API (News)	✅
+API (Favorites)	✅
+Parser (RSS)	✅
+Redis	✅
+Celery Worker	✅
+Logging	✅
+Health-check	✅
+📈 Next Steps
 
----
+Пересказ через AI (интеграция в ai_service)
 
-## ⚠️ Known Issues
+Планировщик (Celery Beat) для регулярного парсинга
 
-* Celery prefork не работает стабильно на Windows
-* Используется `-P solo` для разработки
-* В production рекомендуется Linux
+Telegram bot
 
----
+PostgreSQL (prod)
 
-## 🧠 Architecture Notes
+Авторизация (JWT / Telegram ID)
 
-* Django и Celery — отдельные процессы
-* Redis — broker и result backend
-* Используется `shared_task`
-* API построен на DRF
-* Архитектура модульная (apps)
-
----
-
-## ✅ Status
-
-| Component       | Status |
-| --------------- | ------ |
-| Models          | ✅      |
-| Admin           | ✅      |
-| API (News)      | ✅      |
-| API (Favorites) | ✅      |
-| Redis           | ✅      |
-| Celery          | ✅      |
-| Logging         | ✅      |
-
----
-
-## 📈 Next Steps
-
-* Парсинг новостей (RSS)
-* Интеграция ProxyAPI (AI пересказ)
-* Telegram-бот
-* PostgreSQL
-* Авторизация (JWT / Telegram ID)
-* Персонализированные рассылки
+Персональные подборки/рассылки
