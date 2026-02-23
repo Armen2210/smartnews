@@ -31,24 +31,22 @@ def _get_entry_value(entry: Any, key: str) -> Any:
 
 
 def _parse_published(entry) -> tuple[datetime, bool]:
-    print("🔥 PARSE FUNCTION CALLED")
-    print("ENTRY TYPE:", type(entry))
-
-    # ПРАВИЛЬНЫЙ доступ
     raw = entry.get("published_parsed") or entry.get("updated_parsed")
-
-    print("RAW VALUE:", raw)
 
     if not raw:
         return timezone.now(), True
 
     try:
-        dt = datetime.fromtimestamp(
-            time.mktime(raw),
-            tz=timezone.utc
-        )
+        # правильная конвертация struct_time → datetime
+        dt = datetime.fromtimestamp(time.mktime(raw))
+
+        # делаем timezone-aware
+        dt = timezone.make_aware(dt, timezone=timezone.get_current_timezone())
+
         return dt, False
-    except Exception:
+
+    except Exception as e:
+        print("DATE PARSE ERROR:", e)
         return timezone.now(), True
 
 
