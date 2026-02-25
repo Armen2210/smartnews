@@ -3,12 +3,12 @@ import os
 
 from dotenv import load_dotenv
 import dj_database_url
-
+from celery.schedules import crontab
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Загружаем .env один раз при старте Django
-load_dotenv(BASE_DIR / ".env")
+load_dotenv(BASE_DIR / "backend" / ".env")
 
 """
 Django settings for config project.
@@ -148,9 +148,11 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL") or REDIS_URL
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND") or REDIS_URL
 
+PROXYAPI_API_KEY = os.getenv("PROXYAPI_API_KEY")
 
 
-from celery.schedules import crontab
+
+
 
 CELERY_TIMEZONE = TIME_ZONE
 
@@ -164,7 +166,7 @@ CELERY_BEAT_SCHEDULE = {
 
 
 
-import os
+
 
 LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
