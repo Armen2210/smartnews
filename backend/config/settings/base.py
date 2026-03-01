@@ -31,8 +31,6 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-dev-key")
 
-BOT_SECRET = os.getenv("BOT_SECRET")
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DJANGO_DEBUG", "0") == "1"
 
