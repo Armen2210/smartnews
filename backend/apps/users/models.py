@@ -38,3 +38,12 @@ class Favorite(models.Model):
 
     def __str__(self):
         return f"{self.user} → {self.news_id}"
+
+
+
+# NEW: модель для Telegram пользователей (MVP)
+class TelegramUser(models.Model):
+    telegram_id = models.BigIntegerField(unique=True)
+
+    def __str__(self):
+        return str(self.telegram_id)
