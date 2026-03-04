@@ -1,6 +1,8 @@
 from rest_framework import generics
+
 from .models import News
 from .serializers import NewsListSerializer, NewsDetailSerializer
+from apps.users.permissions import BotSecretPermission
 
 
 class NewsListAPIView(generics.ListAPIView):
@@ -19,3 +21,5 @@ class NewsListAPIView(generics.ListAPIView):
 class NewsDetailAPIView(generics.RetrieveAPIView):
     queryset = News.objects.select_related("category", "source").all()
     serializer_class = NewsDetailSerializer
+    permission_classes = [BotSecretPermission]
+    authentication_classes = []

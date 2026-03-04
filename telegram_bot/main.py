@@ -5,7 +5,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 
 from config import BOT_TOKEN
-from services.api_client import get_news, toggle_favorite, get_favorites
+from services.api_client import get_news, toggle_favorite, get_favorites, get_news_by_id
 from services.formatter import format_news
 from keyboards import get_news_keyboard
 from state import set_user_state, get_user_state, update_index
@@ -54,7 +54,10 @@ async def news_handler(message: types.Message):
         await message.answer("❌ Не удалось получить новости")
         return
 
-    set_user_state(telegram_id, news_list)
+    # сохраняем только ID
+    news_ids = [news["id"] for news in news_list]
+
+    set_user_state(telegram_id, news_ids)
 
     news = news_list[0]
 
@@ -82,41 +85,49 @@ async def next_news(callback: types.CallbackQuery):
             await callback.answer("❌ Не удалось получить новости")
             return
 
-        set_user_state(telegram_id, news_list)
+        news_ids = [news["id"] for news in news_list]
+        set_user_state(telegram_id, news_ids)
 
         news = news_list[0]
 
         await callback.message.answer(
-            format_news(news, 0, len(news_list)),
+            format_news(news, 0, len(news_ids)),
             reply_markup=get_news_keyboard(news)
         )
 
         await callback.answer("🔄 Состояние восстановлено")
         return
 
-    news_list = state["news_list"]
+    news_ids = state["news_ids"]
     index = state["index"] + 1
 
     # 🔄 если список закончился — новый запрос
-    if index >= len(news_list):
+    if index >= len(news_ids):
         news_list = await get_news(telegram_id)
 
         if not news_list:
             await callback.answer("❌ Не удалось обновить новости")
             return
 
-        set_user_state(telegram_id, news_list)
-        index = 0
+        news_ids = [news["id"] for news in news_list]
+        set_user_state(telegram_id, news_ids)
 
+        index = 0
         await callback.answer("🔄 Обновлено")
 
     else:
         update_index(telegram_id, index)
 
-    news = news_list[index]
+    news_id = news_ids[index]
+
+    news = await get_news_by_id(telegram_id, news_id)
+
+    if not news:
+        await callback.answer("❌ Ошибка загрузки новости")
+        return
 
     await callback.message.edit_text(
-        format_news(news, index, len(news_list)),
+        format_news(news, index, len(news_ids)),
         reply_markup=get_news_keyboard(news)
     )
 
@@ -131,39 +142,33 @@ async def favorite_handler(callback: types.CallbackQuery):
 
     state = get_user_state(telegram_id)
 
-    # 🔄 fallback если состояние потеряно
     if not state:
-        news_list = await get_news(telegram_id)
-
-        if not news_list:
-            await callback.answer("❌ Не удалось получить новости")
-            return
-
-        set_user_state(telegram_id, news_list)
-        news = news_list[0]
-
-        await callback.message.answer(
-            format_news(news, 0, len(news_list)),
-            reply_markup=get_news_keyboard(news)
-        )
-
-        await callback.answer("🔄 Состояние восстановлено")
+        await callback.answer("⚠️ Сначала вызови /news")
         return
 
-    news = state["news_list"][state["index"]]
+    news_ids = state["news_ids"]
+    index = state["index"]
 
-    result = await toggle_favorite(telegram_id, news["id"])
+    news_id = news_ids[index]
+
+    news = await get_news_by_id(telegram_id, news_id)
+
+    if not news:
+        await callback.answer("❌ Не удалось получить новость")
+        return
+
+    result = await toggle_favorite(telegram_id, news_id)
 
     if not result:
         await callback.answer("❌ Ошибка")
         return
 
-    # 🔥 обновляем локальное состояние
-    news["is_favorite"] = result["status"] == "added"
-
-    await callback.answer(
-        "⭐ Добавлено" if news["is_favorite"] else "❌ Удалено"
-    )
+    if result["status"] == "added":
+        news["is_favorite"] = True
+        await callback.answer("⭐ Добавлено")
+    else:
+        news["is_favorite"] = False
+        await callback.answer("❌ Удалено")
 
     await callback.message.edit_reply_markup(
         reply_markup=get_news_keyboard(news)

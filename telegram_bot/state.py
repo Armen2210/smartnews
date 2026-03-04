@@ -1,9 +1,9 @@
 user_state = {}
 
 
-def set_user_state(telegram_id: int, news_list: list):
+def set_user_state(telegram_id: int, news_ids: list):
     user_state[telegram_id] = {
-        "news_list": news_list,
+        "news_ids": news_ids,
         "index": 0
     }
 

@@ -35,7 +35,7 @@ async def get_news(telegram_id: int):
         "X-Telegram-ID": str(telegram_id),
         "X-BOT-SECRET": BOT_SECRET,
     }
-    return await request_with_retry("GET", url, headers)
+    return await request_with_retry("GET", url, headers=headers)
 
 
 async def toggle_favorite(telegram_id: int, news_id: int):
@@ -55,3 +55,14 @@ async def get_favorites(telegram_id: int):
         "X-BOT-SECRET": BOT_SECRET,
     }
     return await request_with_retry("GET", url, headers)
+
+
+async def get_news_by_id(telegram_id: int, news_id: int):
+    url = f"{API_BASE_URL}/api/news/{news_id}/"
+
+    headers = {
+        "X-Telegram-ID": str(telegram_id),
+        "X-BOT-SECRET": BOT_SECRET,
+    }
+
+    return await request_with_retry("GET", url, headers=headers)
