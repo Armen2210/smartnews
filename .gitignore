@@ -1,0 +1,23 @@
+# Virtual environments
+.venv/
+*/.venv/
+
+# Environment files
+.env
+*.env
+backend/.env
+telegram_bot/.env
+
+# Python
+__pycache__/
+*.pyc
+
+# SQLite
+db.sqlite3
+
+# Celery
+celerybeat-schedule*
+
+# Logs
+*.log
+logs/
