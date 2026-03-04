@@ -1,100 +1,32 @@
 import asyncio
-import os
+import logging
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from dotenv import load_dotenv
-import httpx
 
-load_dotenv()
+from config import BOT_TOKEN
+from services.api_client import get_news, toggle_favorite, get_favorites
+from services.formatter import format_news
+from keyboards import get_news_keyboard
+from state import set_user_state, get_user_state, update_index
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-API_BASE_URL = os.getenv("API_BASE_URL")
-BOT_SECRET = os.getenv("BOT_SECRET")
 
+# =========================================
+# 🔹 Logging
+# =========================================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
+
+logger = logging.getLogger(__name__)
+
+
+# =========================================
+# 🔹 Bot init
+# =========================================
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
-
-# =========================================
-# 🧠 STATE (MVP)
-# =========================================
-user_state = {}
-
-
-# =========================================
-# 🔹 API: получить новости
-# =========================================
-async def get_news(telegram_id: int):
-    url = f"{API_BASE_URL}/api/users/me/news/"
-
-    headers = {
-        "X-Telegram-ID": str(telegram_id),
-        "X-BOT-SECRET": BOT_SECRET,
-    }
-
-    async with httpx.AsyncClient(timeout=10.0, trust_env=False) as client:
-        try:
-            response = await client.get(url, headers=headers)
-
-            if response.status_code == 200:
-                return response.json()
-            return None
-
-        except Exception as e:
-            print("HTTPX ERROR:", e)
-            return None
-
-
-# =========================================
-# 🔹 API: toggle избранного
-# =========================================
-async def toggle_favorite(telegram_id: int, news_id: int):
-    url = f"{API_BASE_URL}/api/favorites/toggle/"
-
-    headers = {
-        "X-Telegram-ID": str(telegram_id),
-        "X-BOT-SECRET": BOT_SECRET,
-    }
-
-    payload = {
-        "news_id": news_id
-    }
-
-    async with httpx.AsyncClient(timeout=10.0, trust_env=False) as client:
-        try:
-            response = await client.post(url, headers=headers, json=payload)
-
-            if response.status_code == 200:
-                return response.json()
-            return None
-
-        except Exception as e:
-            print("HTTPX ERROR:", e)
-            return None
-
-
-# =========================================
-# 🔹 КНОПКИ
-# =========================================
-def get_news_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="➡ Следующая", callback_data="next"),
-            InlineKeyboardButton(text="⭐ В избранное", callback_data="fav"),
-        ]
-    ])
-
-
-# =========================================
-# 🔹 формат новости
-# =========================================
-def format_news(news: dict) -> str:
-    return (
-        f"📰 {news['title']}\n\n"
-        f"{news['summary_text']}\n\n"
-        f"Категория: {news['category']}"
-    )
 
 
 # =========================================
@@ -102,6 +34,9 @@ def format_news(news: dict) -> str:
 # =========================================
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
+    telegram_id = message.from_user.id
+    logger.info(f"{telegram_id} | action=start")
+
     await message.answer("Привет! Напиши /news чтобы получить новости 📰")
 
 
@@ -111,6 +46,7 @@ async def start_handler(message: types.Message):
 @dp.message(Command("news"))
 async def news_handler(message: types.Message):
     telegram_id = message.from_user.id
+    logger.info(f"{telegram_id} | action=news")
 
     news_list = await get_news(telegram_id)
 
@@ -118,16 +54,13 @@ async def news_handler(message: types.Message):
         await message.answer("❌ Не удалось получить новости")
         return
 
-    user_state[telegram_id] = {
-        "news_list": news_list,
-        "index": 0
-    }
+    set_user_state(telegram_id, news_list)
 
     news = news_list[0]
 
     await message.answer(
-        format_news(news),
-        reply_markup=get_news_keyboard()
+        format_news(news, 0, len(news_list)),
+        reply_markup=get_news_keyboard(news)
     )
 
 
@@ -137,24 +70,54 @@ async def news_handler(message: types.Message):
 @dp.callback_query(lambda c: c.data == "next")
 async def next_news(callback: types.CallbackQuery):
     telegram_id = callback.from_user.id
+    logger.info(f"{telegram_id} | action=next")
 
-    if telegram_id not in user_state:
-        await callback.message.answer("⚠️ Начни с /news")
+    state = get_user_state(telegram_id)
+
+    # 🔄 fallback — если состояние потеряно
+    if not state:
+        news_list = await get_news(telegram_id)
+
+        if not news_list:
+            await callback.answer("❌ Не удалось получить новости")
+            return
+
+        set_user_state(telegram_id, news_list)
+
+        news = news_list[0]
+
+        await callback.message.answer(
+            format_news(news, 0, len(news_list)),
+            reply_markup=get_news_keyboard(news)
+        )
+
+        await callback.answer("🔄 Состояние восстановлено")
         return
 
-    state = user_state[telegram_id]
     news_list = state["news_list"]
     index = state["index"] + 1
 
+    # 🔄 если список закончился — новый запрос
     if index >= len(news_list):
+        news_list = await get_news(telegram_id)
+
+        if not news_list:
+            await callback.answer("❌ Не удалось обновить новости")
+            return
+
+        set_user_state(telegram_id, news_list)
         index = 0
 
-    state["index"] = index
+        await callback.answer("🔄 Обновлено")
+
+    else:
+        update_index(telegram_id, index)
+
     news = news_list[index]
 
     await callback.message.edit_text(
-        format_news(news),
-        reply_markup=get_news_keyboard()
+        format_news(news, index, len(news_list)),
+        reply_markup=get_news_keyboard(news)
     )
 
 
@@ -164,12 +127,29 @@ async def next_news(callback: types.CallbackQuery):
 @dp.callback_query(lambda c: c.data == "fav")
 async def favorite_handler(callback: types.CallbackQuery):
     telegram_id = callback.from_user.id
+    logger.info(f"{telegram_id} | action=fav")
 
-    if telegram_id not in user_state:
-        await callback.answer("⚠️ Начни с /news")
+    state = get_user_state(telegram_id)
+
+    # 🔄 fallback если состояние потеряно
+    if not state:
+        news_list = await get_news(telegram_id)
+
+        if not news_list:
+            await callback.answer("❌ Не удалось получить новости")
+            return
+
+        set_user_state(telegram_id, news_list)
+        news = news_list[0]
+
+        await callback.message.answer(
+            format_news(news, 0, len(news_list)),
+            reply_markup=get_news_keyboard(news)
+        )
+
+        await callback.answer("🔄 Состояние восстановлено")
         return
 
-    state = user_state[telegram_id]
     news = state["news_list"][state["index"]]
 
     result = await toggle_favorite(telegram_id, news["id"])
@@ -178,17 +158,51 @@ async def favorite_handler(callback: types.CallbackQuery):
         await callback.answer("❌ Ошибка")
         return
 
-    if result["status"] == "added":
-        await callback.answer("⭐ Добавлено")
-    else:
-        await callback.answer("❌ Удалено")
+    # 🔥 обновляем локальное состояние
+    news["is_favorite"] = result["status"] == "added"
+
+    await callback.answer(
+        "⭐ Добавлено" if news["is_favorite"] else "❌ Удалено"
+    )
+
+    await callback.message.edit_reply_markup(
+        reply_markup=get_news_keyboard(news)
+    )
+
+
+# =========================================
+# ⭐ /favorites
+# =========================================
+@dp.message(Command("favorites"))
+async def favorites_handler(message: types.Message):
+    telegram_id = message.from_user.id
+    logger.info(f"{telegram_id} | action=favorites")
+
+    news_list = await get_favorites(telegram_id)
+
+    if news_list is None:
+        await message.answer("❌ Ошибка при получении избранного")
+        return
+
+    if not news_list:
+        await message.answer("⭐ У тебя пока нет избранных новостей")
+        return
+
+    set_user_state(telegram_id, news_list)
+
+    news = news_list[0]
+
+    await message.answer(
+        format_news(news, 0, len(news_list)),
+        reply_markup=get_news_keyboard(news)
+    )
 
 
 # =========================================
 # 🔹 запуск
 # =========================================
 async def main():
-    print("🚀 Bot started...")
+    logger.info("🚀 Bot started...")
     await dp.start_polling(bot)
 
 
