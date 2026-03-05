@@ -161,7 +161,7 @@ CELERY_TIMEZONE = TIME_ZONE
 
 CELERY_BEAT_SCHEDULE = {
     "parse-news-every-5-min": {
-        "task": "apps.parser.tasks.parse_news_stub",
+        "task": "parser.parse_news_stub",
         "schedule": crontab(minute="*/5"),
     },
 }

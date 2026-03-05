@@ -1,0 +1,70 @@
+version: "3.9"
+
+services:
+
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_DB: smartnews
+      POSTGRES_USER: smartnews
+      POSTGRES_PASSWORD: smartnews
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    restart: always
+
+
+  backend:
+    build: ./backend
+    command: >
+      sh -c "
+      python manage.py migrate &&
+      gunicorn config.wsgi:application --bind 0.0.0.0:8000
+      "
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env.docker
+    depends_on:
+      - postgres
+      - redis
+
+  celery_worker:
+    build: ./backend
+    command: celery -A config worker -l info
+    volumes:
+      - ./backend:/app
+    env_file:
+      - ./backend/.env.docker
+    depends_on:
+      - backend
+      - redis
+
+  celery_beat:
+    build: ./backend
+    command: celery -A config beat -l info
+    volumes:
+      - ./backend:/app
+    env_file:
+      - ./backend/.env.docker
+    depends_on:
+      - backend
+      - redis
+
+  telegram_bot:
+    build: ./telegram_bot
+    command: python main.py
+    env_file:
+      - ./telegram_bot/.env.docker
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

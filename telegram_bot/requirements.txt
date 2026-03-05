@@ -1,3 +1,4 @@
+aiogram==3.4.1
 amqp==5.3.1
 asgiref==3.11.1
 beautifulsoup4==4.14.3
@@ -15,6 +16,7 @@ dj-database-url==2.3.0
 Django==5.2.11
 djangorestframework==3.16.1
 feedparser==6.0.12
+httpx
 idna==3.11
 kombu==5.6.2
 packaging==26.0

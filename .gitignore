@@ -2,11 +2,16 @@
 .venv/
 */.venv/
 
-# Environment files
+# Environment files (secrets)
 .env
-*.env
+.env.*
 backend/.env
 telegram_bot/.env
+
+# Allow example env files
+!.env.example
+!backend/.env.example
+!telegram_bot/.env.example
 
 # Python
 __pycache__/
