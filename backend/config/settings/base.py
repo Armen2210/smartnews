@@ -164,6 +164,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "parser.parse_news_stub",
         "schedule": crontab(minute="*/5"),
     },
+    "daily-digest": {
+        "task": "apps.users.tasks.send_daily_digest",
+        "schedule": crontab(hour=9, minute=0),
+    },
 }
 
 

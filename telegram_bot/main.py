@@ -193,7 +193,8 @@ async def favorites_handler(message: types.Message):
         await message.answer("⭐ У тебя пока нет избранных новостей")
         return
 
-    set_user_state(telegram_id, news_list)
+    news_ids = [news["id"] for news in news_list]
+    set_user_state(telegram_id, news_ids)
 
     news = news_list[0]
 

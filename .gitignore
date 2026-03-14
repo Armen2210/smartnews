@@ -12,6 +12,8 @@ telegram_bot/.env
 !.env.example
 !backend/.env.example
 !telegram_bot/.env.example
+!backend/.env.docker.example
+!telegram_bot/.env.docker.example
 
 # Python
 __pycache__/
