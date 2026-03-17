@@ -66,3 +66,22 @@ async def get_news_by_id(telegram_id: int, news_id: int):
     }
 
     return await request_with_retry("GET", url, headers=headers)
+
+
+async def get_preferences(telegram_id: int):
+    url = f"{API_BASE_URL}/api/users/preferences/"
+    headers = {
+        "X-Telegram-ID": str(telegram_id),
+        "X-BOT-SECRET": BOT_SECRET,
+    }
+    return await request_with_retry("GET", url, headers=headers)
+
+
+async def toggle_preference(telegram_id: int, category_slug: str):
+    url = f"{API_BASE_URL}/api/users/preferences/toggle/"
+    headers = {
+        "X-Telegram-ID": str(telegram_id),
+        "X-BOT-SECRET": BOT_SECRET,
+    }
+    payload = {"category_slug": category_slug}
+    return await request_with_retry("POST", url, headers, json=payload)

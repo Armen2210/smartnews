@@ -7,15 +7,19 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramBadRequest
 
 from bot_config import BOT_TOKEN
-from services.api_client import get_news, toggle_favorite, get_favorites, get_news_by_id
+from services.api_client import (
+    get_news,
+    toggle_favorite,
+    get_favorites,
+    get_news_by_id,
+    get_preferences,
+    toggle_preference,
+)
 from services.formatter import format_news
-from keyboards import get_news_keyboard
+from keyboards import get_news_keyboard, get_categories_keyboard
 from state import set_user_state, get_user_state, update_index
 
 
-# =========================================
-# 🔹 Logging
-# =========================================
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s"
@@ -23,10 +27,6 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-
-# =========================================
-# 🔹 Bot init
-# =========================================
 session = AiohttpSession(timeout=60)
 
 bot = Bot(
@@ -37,20 +37,17 @@ bot = Bot(
 dp = Dispatcher()
 
 
-# =========================================
-# 🔹 /start
-# =========================================
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
     telegram_id = message.from_user.id
     logger.info(f"{telegram_id} | action=start")
 
-    await message.answer("Привет! Напиши /news чтобы получить новости 📰")
+    await message.answer(
+        "Привет! Напиши /news чтобы получить новости 📰\n"
+        "Или /categories чтобы выбрать интересующие категории."
+    )
 
 
-# =========================================
-# 🔹 /news
-# =========================================
 @dp.message(Command("news"))
 async def news_handler(message: types.Message):
     telegram_id = message.from_user.id
@@ -62,9 +59,7 @@ async def news_handler(message: types.Message):
         await message.answer("❌ Не удалось получить новости")
         return
 
-    # сохраняем только ID
     news_ids = [news["id"] for news in news_list]
-
     set_user_state(telegram_id, news_ids)
 
     news = news_list[0]
@@ -75,9 +70,27 @@ async def news_handler(message: types.Message):
     )
 
 
-# =========================================
-# 🔹 NEXT
-# =========================================
+@dp.message(Command("categories"))
+async def categories_handler(message: types.Message):
+    telegram_id = message.from_user.id
+    logger.info(f"{telegram_id} | action=categories")
+
+    categories = await get_preferences(telegram_id)
+
+    if categories is None:
+        await message.answer("❌ Не удалось получить категории")
+        return
+
+    if not categories:
+        await message.answer("⚠️ Категории пока отсутствуют")
+        return
+
+    await message.answer(
+        "Выбери интересующие категории:",
+        reply_markup=get_categories_keyboard(categories)
+    )
+
+
 @dp.callback_query(lambda c: c.data == "next")
 async def next_news(callback: types.CallbackQuery):
     telegram_id = callback.from_user.id
@@ -85,7 +98,6 @@ async def next_news(callback: types.CallbackQuery):
 
     state = get_user_state(telegram_id)
 
-    # 🔄 fallback — если состояние потеряно
     if not state:
         news_list = await get_news(telegram_id)
 
@@ -109,7 +121,6 @@ async def next_news(callback: types.CallbackQuery):
     news_ids = state["news_ids"]
     index = state["index"] + 1
 
-    # 🔄 если список закончился — новый запрос
     if index >= len(news_ids):
         news_list = await get_news(telegram_id)
 
@@ -140,15 +151,11 @@ async def next_news(callback: types.CallbackQuery):
     )
 
 
-# =========================================
-# ⭐ FAVORITE
-# =========================================
 @dp.callback_query(lambda c: c.data == "fav")
 async def favorite_handler(callback: types.CallbackQuery):
     telegram_id = callback.from_user.id
     logger.info(f"{telegram_id} | action=fav")
 
-    # Пытаемся быстро закрыть callback, но не падаем, если он уже устарел
     try:
         await callback.answer()
     except TelegramBadRequest as e:
@@ -193,9 +200,35 @@ async def favorite_handler(callback: types.CallbackQuery):
     await callback.message.answer(result_text)
 
 
-# =========================================
-# ⭐ /favorites
-# =========================================
+@dp.callback_query(lambda c: c.data.startswith("cat:"))
+async def category_toggle_handler(callback: types.CallbackQuery):
+    telegram_id = callback.from_user.id
+    logger.info(f"{telegram_id} | action=toggle_category | data={callback.data}")
+
+    category_slug = callback.data.split(":", 1)[1]
+
+    result = await toggle_preference(telegram_id, category_slug)
+
+    if result is None:
+        await callback.answer("❌ Ошибка переключения", show_alert=True)
+        return
+
+    categories = await get_preferences(telegram_id)
+
+    if categories is None:
+        await callback.answer("❌ Не удалось обновить список", show_alert=True)
+        return
+
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=get_categories_keyboard(categories)
+        )
+    except TelegramBadRequest as e:
+        logger.warning(f"Categories markup update skipped: {e}")
+
+    await callback.answer("✅ Обновлено")
+
+
 @dp.message(Command("favorites"))
 async def favorites_handler(message: types.Message):
     telegram_id = message.from_user.id
@@ -222,9 +255,6 @@ async def favorites_handler(message: types.Message):
     )
 
 
-# =========================================
-# 🔹 запуск
-# =========================================
 async def main():
     logger.info("🚀 Bot started...")
     await dp.start_polling(bot, polling_timeout=30)

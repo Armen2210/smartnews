@@ -1,9 +1,18 @@
 from django.urls import path
-from .views import FavoriteToggleAPIView, FavoriteToggleBotAPIView, UserNewsAPIView, UserFavoritesAPIView  # NEW
+from .views import (
+    FavoriteToggleAPIView,
+    FavoriteToggleBotAPIView,
+    UserNewsAPIView,
+    UserFavoritesAPIView,
+    UserPreferencesAPIView,
+    UserPreferenceToggleAPIView,
+)
 
 urlpatterns = [
     path("favorites/toggle/", FavoriteToggleAPIView.as_view(), name="api-favorite-toggle"),
-    path("favorites/toggle-bot/", FavoriteToggleBotAPIView.as_view()), # NEW для ТГ бота
+    path("favorites/toggle-bot/", FavoriteToggleBotAPIView.as_view()),
     path("users/me/news/", UserNewsAPIView.as_view()),
-    path("users/me/favorites/", UserFavoritesAPIView.as_view()), # NEW для ТГ бота
+    path("users/me/favorites/", UserFavoritesAPIView.as_view()),
+    path("users/preferences/", UserPreferencesAPIView.as_view()),
+    path("users/preferences/toggle/", UserPreferenceToggleAPIView.as_view()),
 ]

@@ -8,6 +8,17 @@
 backend/.env
 telegram_bot/.env
 
+# Docker
+*.env.docker
+*.env.docker.local
+
+# Coverage / тесты
+.coverage
+htmlcov/
+
+# PyCharm
+*.iml
+
 # Allow example env files
 !.env.example
 !backend/.env.example

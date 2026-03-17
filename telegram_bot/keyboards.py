@@ -20,3 +20,18 @@ def get_news_keyboard(news: dict):
         )
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_categories_keyboard(categories: list[dict]):
+    buttons = []
+
+    for category in categories:
+        prefix = "✔" if category.get("selected") else "✖"
+        text = f"{prefix} {category['name']}"
+        callback_data = f"cat:{category['slug']}"
+
+        buttons.append([
+            InlineKeyboardButton(text=text, callback_data=callback_data)
+        ])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
