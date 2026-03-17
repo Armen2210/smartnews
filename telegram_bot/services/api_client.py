@@ -2,7 +2,7 @@ import asyncio
 import logging
 import httpx
 
-from config import API_BASE_URL, BOT_SECRET
+from bot_config import API_BASE_URL, BOT_SECRET
 
 logger = logging.getLogger(__name__)
 

@@ -3,8 +3,10 @@ import logging
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
+from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.exceptions import TelegramBadRequest
 
-from config import BOT_TOKEN
+from bot_config import BOT_TOKEN
 from services.api_client import get_news, toggle_favorite, get_favorites, get_news_by_id
 from services.formatter import format_news
 from keyboards import get_news_keyboard
@@ -25,7 +27,13 @@ logger = logging.getLogger(__name__)
 # =========================================
 # 🔹 Bot init
 # =========================================
-bot = Bot(token=BOT_TOKEN)
+session = AiohttpSession(timeout=60)
+
+bot = Bot(
+    token=BOT_TOKEN,
+    session=session
+)
+
 dp = Dispatcher()
 
 
@@ -140,39 +148,49 @@ async def favorite_handler(callback: types.CallbackQuery):
     telegram_id = callback.from_user.id
     logger.info(f"{telegram_id} | action=fav")
 
+    # Пытаемся быстро закрыть callback, но не падаем, если он уже устарел
+    try:
+        await callback.answer()
+    except TelegramBadRequest as e:
+        logger.warning(f"Callback answer skipped: {e}")
+
     state = get_user_state(telegram_id)
 
     if not state:
-        await callback.answer("⚠️ Сначала вызови /news")
+        await callback.message.answer("⚠️ Сначала вызови /news")
         return
 
     news_ids = state["news_ids"]
     index = state["index"]
-
     news_id = news_ids[index]
 
     news = await get_news_by_id(telegram_id, news_id)
 
     if not news:
-        await callback.answer("❌ Не удалось получить новость")
+        await callback.message.answer("❌ Не удалось получить новость")
         return
 
     result = await toggle_favorite(telegram_id, news_id)
 
     if not result:
-        await callback.answer("❌ Ошибка")
+        await callback.message.answer("❌ Ошибка при обновлении избранного")
         return
 
     if result["status"] == "added":
         news["is_favorite"] = True
-        await callback.answer("⭐ Добавлено")
+        result_text = "⭐ Добавлено в избранное"
     else:
         news["is_favorite"] = False
-        await callback.answer("❌ Удалено")
+        result_text = "❌ Удалено из избранного"
 
-    await callback.message.edit_reply_markup(
-        reply_markup=get_news_keyboard(news)
-    )
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=get_news_keyboard(news)
+        )
+    except TelegramBadRequest as e:
+        logger.warning(f"Reply markup update skipped: {e}")
+
+    await callback.message.answer(result_text)
 
 
 # =========================================
@@ -209,7 +227,7 @@ async def favorites_handler(message: types.Message):
 # =========================================
 async def main():
     logger.info("🚀 Bot started...")
-    await dp.start_polling(bot)
+    await dp.start_polling(bot, polling_timeout=30)
 
 
 if __name__ == "__main__":
